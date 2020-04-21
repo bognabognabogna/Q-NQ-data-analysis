@@ -65,45 +65,55 @@ Kh=deoptim_out$optim$bestmem[2] %>% as.numeric()#fitted_params['VK']
 freshLag = deoptim_out$optim$bestmem[3] %>% as.numeric()
 
 
-deoptim_fit_params = data.frame(N0 = numeric(0), lag = numeric(0), week = integer(0), type = character(0))
+deoptim_fit_params = data.frame(N0 = numeric(0), lag = numeric(0), week = integer(0), type = character(0), bestval = numeric(0))
 #Vh=106;Kh=106;a=0.0084 % fitted to freshcells when lag = 0
 #Vh=165.63; Kh=127.81; a=0.0079; # fitted to fresh cells by Matlab when lag = 2.5
 minLag = 0.5
 types = c("Q", "NQ", "S")
 for (type in types) {
 #timeslag = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", type, "_H20/LAG_Bogna.txt"), header = TRUE);
-max_time = ifelse(type == "NQ" & i > 2, 24, 16)
-for (i in 1:6) {
-dataQ = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", type, "_H20/W", i, "_",type, " H2O_summary.txt"), header = TRUE);
-dataQ = dataQ %>%
-  filter(time_hours <= max_time) %>%
-  mutate(biomass = Biomass/mg_count)
-N0 = dataQ$biomass[1]
-data = dataQ
-deoptim_out = DEoptim(fn = sumLeastSquaresFitNprop3, lower = c(0,minLag), upper=c(1,10))
-deoptim_fit_params = deoptim_fit_params %>% 
-  rbind(data.frame(N0= deoptim_out$optim$bestmem[1], lag =  deoptim_out$optim$bestmem[2], week = i, type = type))
-dataQ_new =dataQ
-dataQ_new$predicted = simulate_regrowth_with_lag(a, Vh, Kh,deoptim_out$optim$bestmem[2] %>% as.numeric(),N0, deoptim_out$optim$bestmem[1] %>% as.numeric(), H0)
-dataQ_new = dataQ_new %>%
-  tidyr::gather(key="type", value="biomass", biomass, predicted)
-p1=ggplot(dataQ_new) + 
-  geom_point(aes(time_hours,biomass, color = type)) +
-  ggtitle(paste0("Pop: ", type, " week: ", i))
-print(p1)
-}
+  for (i in 1:6) {
+    max_time = ifelse(type == "NQ" & i > 2, 24, 16)
+    dataQ = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", type, "_H20/W", i, "_",type, " H2O_summary.txt"), header = TRUE);
+    dataQ = dataQ %>%
+      filter(time_hours <= max_time) %>%
+      mutate(biomass = Biomass/mg_count)
+    N0 = dataQ$biomass[1]
+    data = dataQ
+    deoptim_out = DEoptim(fn = sumLeastSquaresFitNprop3, lower = c(0,minLag), upper=c(1,10))
+    deoptim_fit_params = deoptim_fit_params %>% 
+      rbind(data.frame(N0= deoptim_out$optim$bestmem[1], lag =  deoptim_out$optim$bestmem[2], week = i, type = type, bestval = deoptim_out$optim$bestval))
+    dataQ_new =dataQ
+    dataQ_new$predicted = simulate_regrowth_with_lag(a, Vh, Kh,deoptim_out$optim$bestmem[2] %>% as.numeric(),N0, deoptim_out$optim$bestmem[1] %>% as.numeric(), H0)
+    dataQ_new = dataQ_new %>%
+      tidyr::gather(key="type", value="biomass", biomass, predicted)
+    p1=ggplot(dataQ_new) + 
+      geom_point(aes(time_hours,biomass, color = type)) +
+      ggtitle(paste0("Pop: ", type, " week: ", i))
+    print(p1)
+    }
 }
 
 ggplot(deoptim_fit_params, aes(x = week)) +
   geom_point(aes(y = N0, col = type)) + 
   geom_line(aes(y = N0, col = type)) +
-  ylim(c(0,1))
+  ylim(c(0,1)) +
+  ylab('fitted N0')
 
 
 ggplot(deoptim_fit_params, aes(x = week)) +
   geom_point(aes(y = lag, col = type)) + 
   geom_line(aes(y = lag, col = type)) +
-  ylim(c(0,10))
+  ylim(c(0,10)) +
+  ylab('fitted lag')
+
+ggplot(deoptim_fit_params, aes(x = week)) +
+  geom_point(aes(y = bestval, col = type)) + 
+  geom_line(aes(y = bestval, col = type)) +
+  ylim(c(0,10)) +
+  ylab('sum of squared errors for the best fit')
 
 
 # DeOPtim gives same results like multistart but is quicker and doesn't require setting arbitrary start points
+
+# Now do sensitivity analysis try to fit params for slightly shifted lags
