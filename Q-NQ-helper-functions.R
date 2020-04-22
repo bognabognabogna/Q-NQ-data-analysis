@@ -12,6 +12,7 @@ simulate_regrowth_single_strain = function(Time, State, Pars) {
 # FITTING PARAMETERS TO FRESH CELLS
 # Remember: data comes from the global environment. Set this variable before calling this function
 # Here data should be a data frame of times and biomass: one observation per each time point
+# data is taken from the global environment
 simulate_regrowth_with_lag = function(a, Vh, Kh, tlag, N0, Nprop, H0) {
   timesLag = data %>% filter(time_hours < tlag) %>% pull(time_hours)
   timesGrowth = data %>% filter(time_hours >= tlag) %>% mutate(time_hours = time_hours - tlag) %>% pull(time_hours)
@@ -42,7 +43,7 @@ sumLeastSquaresFitGrowth = function(param, a, tlag, N0, H0) {
 # it returns sum of squared errors so we want to find Kh, Vh and tlag such that they minimise this function
 # Remember: data comes from the global environment. Set this variable before calling this function
 # Here data should be a data frame of times and biomass: one observation per each time point
-#Parameters a,N0 and H0 are taken from the global environment
+#Parameters data, a,N0 and H0 are taken from the global environment
 sumLeastSquaresFitGrowthToDeoptim = function(param) {
   Vh = param[1]
   Kh = param[2]
@@ -56,33 +57,26 @@ sumLeastSquaresFitGrowthToDeoptim = function(param) {
 # it returns sum of squared errors so we want to find N0 such that they minimise this function
 # Remember: data comes from the global environment. Set this variable before calling this function
 # Here data should be a data frame of times and biomass: one observation per each time point
-sumLeastSquaresFitNprop = function(param, a, Vh,Kh, N0, H0, tlag) {
+# data, a, Vh, Kh, tlag, N0, H0 are taken from the global env
+sumLeastSquaresFitNprop = function(param) {
   Nprop = param[1]
   simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop, H0)
   difference = data$biomass - simulatedN
-  return(sum(difference^2))
+  num_obs = length(difference)
+  return(sum(difference^2)/num_obs)
 }
 
-# we will use that function to fit No and lag at the same time.
-# it returns sum of squared errors so we want to find N0 and lag such that they minimise this function
-# Remember: data comes from the global environment. Set this variable before calling this function
-# Here data should be a data frame of times and biomass: one observation per each time point
-sumLeastSquaresFitNprop2 = function(param, a, Vh,Kh, N0, H0) {
-  Nprop = param[1]
-  tlag = param[2]
-  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop, H0)
-  difference = data$biomass - simulatedN
-  return(sum(difference^2))
-}
 
 # Same as above but a, Vh, Kh, tlag,N0 and H0 are taken from the global environment
 # This is because function DEoptim can only handle a function of one input = param
+# Parameters a,Vh,Kh,N0,H0, data are taken from the global env
 sumLeastSquaresFitNprop3 = function(param) {
   Nprop = param[1]
   tlag = param[2]
   simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop, H0)
   difference = data$biomass - simulatedN
-  return(sum(difference^2))
+  num_obs = length(difference)
+  return(sum(difference^2)/num_obs)
 }
 
 
