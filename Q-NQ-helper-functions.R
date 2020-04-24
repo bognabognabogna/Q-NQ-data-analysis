@@ -79,6 +79,12 @@ sumLeastSquaresFitNprop3 = function(param) {
   return(sum(difference^2)/num_obs)
 }
 
+GetMeanValues = function(data, cols_to_group_by) {
+  averagedData = data %>%
+    group_by_at(cols_to_group_by) %>%
+    summarise(meanBiomass = mean(biomass, na.rm = TRUE))
+  return(averagedData)
+}
 
 
 # This is a function used for MLE fitting
