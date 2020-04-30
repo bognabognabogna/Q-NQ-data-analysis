@@ -81,12 +81,13 @@ minLag = 0.5
 types = c("Q", "NQ", "S")
 weeks = 1:6
 
-types = "Q"
+
 for (selected_type in types) {
 osberved_lags = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20/LAG_Bogna.txt"), header = TRUE)
 #timeslag = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", type, "_H20/LAG_Bogna.txt"), header = TRUE);
   for (selected_week in weeks) {
-    max_time = ifelse(selected_type == "NQ" & selected_week > 2, 24, 16)
+    max_time = 12
+    #max_time = ifelse(selected_type == "NQ" & selected_week > 2, 24, 16)
     maxLag = osberved_lags %>% filter(week == selected_week) %>% pull(meanLAG)
     #data = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20/W", selected_week, "_",selected_type, " H2O_summary.txt"), header = TRUE);
     data_raw = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20_all_no_correction/W_", selected_week, " ",selected_type, " H2O - not corrected.txt"), header = TRUE);
@@ -157,7 +158,8 @@ for (selected_type in types) {
 for (selected_week in weeks) {
   maxLag = osberved_lags %>% filter(week == selected_week) %>% pull(meanLAG)
   minLag = 0.5
-  max_time = ifelse(selected_type == "NQ" & selected_week > 2, 24, 16)
+  #max_time = ifelse(selected_type == "NQ" & selected_week > 2, 24, 16)
+  max_time = 12
   this_deoptim_fit_params = deoptim_fit_params %>% filter(week == selected_week & type == selected_type)
   data_raw = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20_all_no_correction/W_", selected_week, " ",selected_type, " H2O - not corrected.txt"), header = TRUE);
   data_raw = data_raw %>% rename(biomass = meanBiomass)
@@ -200,6 +202,27 @@ for (selected_week in weeks) {
   print(p)
 }
 }
+
+Min = function(x) {if (length(x)==0){NA}else{min(x)}}
+Max = function(x) {if (length(x)==0){NA}else{max(x)}}
+dataWithConfidence = mse_landscape %>%
+  inner_join(deoptim_fit_params %>% select(N0optim = N0, lagoptim = lag, bestval, week, type), by = c("week", "type")) %>%
+  #mutate(goodFit = mse - bestval <= 0.0004) %>%
+  mutate(goodFit = mse - bestval <= 0.05*bestval) %>%
+  group_by(week, type, N0optim) %>%
+  #filter(goodFit) %>%
+  summarise(minN0 = Min(N0[goodFit]),
+            maxN0 = Max(N0[goodFit])) %>%
+  ungroup() %>%
+  mutate(minN0 = ifelse(is.na(minN0), N0optim, minN0 ),
+         maxN0 = ifelse(is.na(maxN0), N0optim, maxN0 ))
+
+ggplot(data = dataWithConfidence) +
+  geom_line(aes(x=week, y = N0optim, col = type)) +
+  geom_point(aes(x=week, y = N0optim, col = type)) +
+  geom_pointrange(aes(x = week, y = N0optim, ymin = minN0, ymax = maxN0, col = type)) +
+  ylab("Fitted N0")
+
 
 # For now do not run the code below
 if (FALSE) {
