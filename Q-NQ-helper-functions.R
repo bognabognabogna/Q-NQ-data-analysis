@@ -13,15 +13,15 @@ simulate_regrowth_single_strain = function(Time, State, Pars) {
 # Remember: data comes from the global environment. Set this variable before calling this function
 # Here data should be a data frame of times and biomass: one observation per each time point
 # data is taken from the global environment
-simulate_regrowth_with_lag = function(a, Vh, Kh, tlag, N0, Nprop, H0) {
-  timesLag = data %>% filter(time_hours < tlag) %>% pull(time_hours)
-  timesGrowth = data %>% filter(time_hours >= tlag) %>% mutate(time_hours = time_hours - tlag) %>% pull(time_hours)
+simulate_regrowth_with_lag = function(a, Vh, Kh, tlag, N0, Nprop, H0, data = data) {
+  timesGrowth = data %>% rowwise() %>% mutate(time = max(0, time_hours - tlag)) %>% pull(time)
   aliveN0 = Nprop*N0
   deadN0 = (1-Nprop)*N0
   pars <- c(a = a, Vh = Vh, Kh = Kh)
   inits = c(G=H0, N=aliveN0)
-  simulation <- as.data.frame(ode(inits, timesGrowth, simulate_regrowth_single_strain, pars)) %>% mutate(N = N + deadN0)
-  simulatedN <- c(rep(N0, length(timesLag)),  simulation$N)
+  simulation <- as.data.frame(ode(inits, timesGrowth, simulate_regrowth_single_strain, pars)) %>% 
+    mutate(N = N + deadN0)
+  simulatedN <- simulation$N
   return(simulatedN)
 }
 
@@ -32,7 +32,7 @@ simulate_regrowth_with_lag = function(a, Vh, Kh, tlag, N0, Nprop, H0) {
 sumLeastSquaresFitGrowth = function(param, a, tlag, N0, H0) {
   Vh = param[1]
   Kh = param[2]
-  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop=1, H0)
+  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop=1, H0, data)
   difference = data$biomass - simulatedN
   return(sum(difference^2))
 }
@@ -48,7 +48,7 @@ sumLeastSquaresFitGrowthToDeoptim = function(param) {
   Vh = param[1]
   Kh = param[2]
   tlag = param[3]
-  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop=1, H0)
+  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop=1, H0, data)
   difference = data$biomass - simulatedN
   return(sum(difference^2))
 }
@@ -60,7 +60,7 @@ sumLeastSquaresFitGrowthToDeoptim = function(param) {
 # data, a, Vh, Kh, tlag, N0, H0 are taken from the global env
 sumLeastSquaresFitNprop = function(param) {
   Nprop = param[1]
-  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop, H0)
+  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop, H0, data)
   difference = data$biomass - simulatedN
   num_obs = length(difference)
   return(sum(difference^2)/num_obs)
@@ -73,7 +73,7 @@ sumLeastSquaresFitNprop = function(param) {
 sumLeastSquaresFitNprop3 = function(param) {
   Nprop = param[1]
   tlag = param[2]
-  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop, H0)
+  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop, H0, data)
   difference = data$biomass - simulatedN
   num_obs = length(difference)
   return(sum(difference^2)/num_obs)

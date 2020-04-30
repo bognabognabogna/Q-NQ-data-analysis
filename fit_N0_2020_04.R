@@ -81,7 +81,7 @@ minLag = 0.5
 types = c("Q", "NQ", "S")
 weeks = 1:6
 
-
+types = "Q"
 for (selected_type in types) {
 osberved_lags = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20/LAG_Bogna.txt"), header = TRUE)
 #timeslag = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", type, "_H20/LAG_Bogna.txt"), header = TRUE);
@@ -89,12 +89,13 @@ osberved_lags = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/
     max_time = ifelse(selected_type == "NQ" & selected_week > 2, 24, 16)
     maxLag = osberved_lags %>% filter(week == selected_week) %>% pull(meanLAG)
     #data = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20/W", selected_week, "_",selected_type, " H2O_summary.txt"), header = TRUE);
-    data = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20_all_no_correction/W_", selected_week, " ",selected_type, " H2O - not corrected.txt"), header = TRUE);
-    data = data %>% rename(biomass = meanBiomass)
-    data = GetMeanValues(data,c("time_hours"))
-    data = data %>%
-      filter(time_hours <= max_time) %>%
+    data_raw = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20_all_no_correction/W_", selected_week, " ",selected_type, " H2O - not corrected.txt"), header = TRUE);
+    data_raw = data_raw %>% rename(biomass = meanBiomass)
+    data_mean = GetMeanValues(data_raw,c("time_hours")) %>%
       mutate(biomass = meanBiomass/mg_count)
+    
+    data = data_mean %>%
+      filter(time_hours <= max_time) 
     N0 = data$biomass[1]
 
     # Parameters a,Vh,Kh,N0,H0, data are taken from the global env
@@ -113,12 +114,12 @@ osberved_lags = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/
       rbind(this_deoptim_fit_params)
     
     
-    data_new = data
+    data_new = data_mean
     # Here data is taken from the global environment
-    data_new$predicted = simulate_regrowth_with_lag(a, Vh, Kh,this_deoptim_fit_params$lag,N0, Nprop=this_deoptim_fit_params$N0, H0)
-    data_new = data_new %>%
+    data_mean$predicted = simulate_regrowth_with_lag(a, Vh, Kh,this_deoptim_fit_params$lag,N0, Nprop=this_deoptim_fit_params$N0, H0, data_mean)
+    data_mean = data_mean %>%
       tidyr::gather(key="selected_type", value="biomass", biomass, predicted)
-    p1=ggplot(data_new) + 
+    p1=ggplot(data_mean) + 
       geom_point(aes(time_hours,biomass, color = selected_type)) +
       ggtitle(paste0("Pop: ", selected_type, " week: ", selected_week)) +
       theme_bw()
@@ -148,52 +149,104 @@ ggplot(deoptim_fit_params, aes(x = week)) +
 
 
 # DeOPtim gives same results like multistart but is quicker and doesn't require setting arbitrary start points
+eps = 0.0004 # on average 0.02 difference per point (0.0024 is 0.01 OD)
+# 5% from the minimal mse
+mse_landscape = data.frame(N0=numeric(0), lag=numeric(0), week=numeric(0), type = numeric(0), mse = numeric(0))
+for (selected_type in types) {
+  osberved_lags = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20/LAG_Bogna.txt"), header = TRUE)
+for (selected_week in weeks) {
+  maxLag = osberved_lags %>% filter(week == selected_week) %>% pull(meanLAG)
+  minLag = 0.5
+  max_time = ifelse(selected_type == "NQ" & selected_week > 2, 24, 16)
+  this_deoptim_fit_params = deoptim_fit_params %>% filter(week == selected_week & type == selected_type)
+  data_raw = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20_all_no_correction/W_", selected_week, " ",selected_type, " H2O - not corrected.txt"), header = TRUE);
+  data_raw = data_raw %>% rename(biomass = meanBiomass)
+  data_mean = GetMeanValues(data_raw,c("time_hours")) %>%
+    mutate(biomass = meanBiomass/mg_count)
+  data = data_mean %>%
+    filter(time_hours <= max_time) 
+  N0 = data$biomass[1]
+  # data, a, Vh, Kh, tlag, N0, H0 are taken from the global env
+  print(paste0(" a: ",a, " Vh: ", Vh, " Kh: ",Kh, " N0: ", N0, " H0: ", H0))
+  
+  # Note a tiny change in tlag may make a big difference in the MSE. As tlag = 0.50001 -> we assume N(0.5) = N0, tlag = 0.499999 -> N(0.5) > N0!
+  opt_mse =  sumLeastSquaresFitNprop3(c(this_deoptim_fit_params$N0, this_deoptim_fit_params$lag))
+  lags = seq(minLag, maxLag, 0.1)
+  N0s = seq(0,1, 0.05)
+  #lags = seq(max(minLag, this_deoptim_fit_params$lag - lagradius), min(maxLag, this_deoptim_fit_params$lag + lagradius), 0.1)
+  #N0s = seq(max(this_deoptim_fit_params$N0 - lagradius,0),min(this_deoptim_fit_params$N0 + N0radius, 1),0.01)
+  for (no in N0s) {
+    for (lag in lags) {
+      mse =  sumLeastSquaresFitNprop3(c(no, lag))
+      this_mse = data.frame(N0=no, lag=lag, week=selected_week, type = selected_type, mse = mse)
+      mse_landscape = rbind(mse_landscape, this_mse)
+    }}
+  min_mse = mse_landscape %>% filter(type == selected_type & week == selected_week) %>% pull(mse) %>% min()
+  p=ggplot(mse_landscape %>% 
+             filter(type == selected_type & week == selected_week) %>% 
+             #mutate(mse = ifelse(mse < min_mse*(1 + eps), mse, NA),
+             mutate(mse = ifelse(mse < opt_mse + eps, mse, NA),
+                    week = paste0("week ", week))) + 
+    geom_tile(aes(y=N0, x=lag, fill=mse)) +
+    geom_text(data = data.frame(x= this_deoptim_fit_params$lag, y = this_deoptim_fit_params$N0),
+               aes(x=x,y=y), label = "*", col = "red") +
+    ggtitle("MSE for specific pairs possible of parameters") +
+    scale_fill_gradient(high="gray90", low="darkblue", na.value = "white") +
+    theme(legend.title = element_blank(),
+          axis.text.x = element_text(angle=30,size = 6),
+          axis.text.y = element_text(size = 6),
+          panel.background = element_rect(fill = "white")) +
+    facet_grid(week ~ type)
+  print(p)
+}
+}
 
-
+# For now do not run the code below
+if (FALSE) {
 # Now do sensitivity analysis try to fit params for slightly shifted lags
 # First vary lag by some coefficient constant for each week and type
 epsilons = c(0.8, 1.5)
 deoptim_fit_params_deviated = data.frame(epsilon = numeric(0), N0 = numeric(0), lag = numeric(0), week = integer(0), type = character(0), bestval = numeric(0))
 for (selected_epsilon in epsilons)
-for (selected_type in types) {
-  osberved_lags = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20/LAG_Bogna.txt"), header = TRUE)
-  #timeslag = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", type, "_H20/LAG_Bogna.txt"), header = TRUE);
-  for (selected_week in weeks) {
-    optim_params = deoptim_fit_params %>% filter(week == selected_week & type == selected_type)
-    maxLag = osberved_lags %>% filter(week == selected_week) %>% pull(meanLAG)
-    deviated_lag = min(max(minLag, selected_epsilon*optim_params$lag), maxLag)
-    max_time = ifelse(selected_type == "NQ" & selected_week > 2, 24, 16)
-
-    #data = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20/W", selected_week, "_",selected_type, " H2O_summary.txt"), header = TRUE);
-    data = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20_all_no_correction/W_", selected_week, " ",selected_type, " H2O - not corrected.txt"), header = TRUE);
-    data = data %>% rename(biomass = meanBiomass)
-    data = GetMeanValues(data,c("time_hours"))
-    data = data %>%
-      filter(time_hours <= max_time) %>%
-      mutate(biomass = meanBiomass/mg_count)
-    N0 = data$biomass[1]
-    tlag = deviated_lag
-    # data, a, Vh, Kh, tlag, N0, H0 are taken from the global env
-    print(paste0(" a: ",a, " Vh: ", Vh, " Kh: ",Kh, " N0: ", N0, " H0: ", H0, " tlag: ", tlag))
-    deoptim_out = DEoptim(fn = sumLeastSquaresFitNprop, lower = c(0), upper=c(1),
-                          control = deopticontrol)
-    this_deoptim_fit_params_deviated = data.frame(N0= deoptim_out$optim$bestmem[1], 
-                                                  lag =  tlag,  
-                                                  week = selected_week, 
-                                                  type = selected_type, 
-                                                  bestval = deoptim_out$optim$bestval, 
-                                                  epsilon = selected_epsilon)
-    # check
-    print(sumLeastSquaresFitNprop3(c(this_deoptim_fit_params_deviated$N0, this_deoptim_fit_params_deviated$lag)) == this_deoptim_fit_params_deviated$bestval)
-    
-    deoptim_fit_params_deviated = deoptim_fit_params_deviated %>% 
-      rbind(this_deoptim_fit_params_deviated)
-    deoptim_out = NULL
-    
+  for (selected_type in types) {
+    osberved_lags = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20/LAG_Bogna.txt"), header = TRUE)
+    #timeslag = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", type, "_H20/LAG_Bogna.txt"), header = TRUE);
+    for (selected_week in weeks) {
+      optim_params = deoptim_fit_params %>% filter(week == selected_week & type == selected_type)
+      maxLag = osberved_lags %>% filter(week == selected_week) %>% pull(meanLAG)
+      deviated_lag = min(max(minLag, selected_epsilon*optim_params$lag), maxLag)
+      max_time = ifelse(selected_type == "NQ" & selected_week > 2, 24, 16)
+      
+      #data = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20/W", selected_week, "_",selected_type, " H2O_summary.txt"), header = TRUE);
+      data = read.table(paste0("/Users/bognasmug/MGG Dropbox/Bogna Smug/Q-NQ/data/experiment2/input/", selected_type, "_H20_all_no_correction/W_", selected_week, " ",selected_type, " H2O - not corrected.txt"), header = TRUE);
+      data = data %>% rename(biomass = meanBiomass)
+      data = GetMeanValues(data,c("time_hours"))
+      data = data %>%
+        filter(time_hours <= max_time) %>%
+        mutate(biomass = meanBiomass/mg_count)
+      N0 = data$biomass[1]
+      tlag = deviated_lag
+      # data, a, Vh, Kh, tlag, N0, H0 are taken from the global env
+      print(paste0(" a: ",a, " Vh: ", Vh, " Kh: ",Kh, " N0: ", N0, " H0: ", H0, " tlag: ", tlag))
+      deoptim_out = DEoptim(fn = sumLeastSquaresFitNprop, lower = c(0), upper=c(1),
+                            control = deopticontrol)
+      this_deoptim_fit_params_deviated = data.frame(N0= deoptim_out$optim$bestmem[1], 
+                                                    lag =  tlag,  
+                                                    week = selected_week, 
+                                                    type = selected_type, 
+                                                    bestval = deoptim_out$optim$bestval, 
+                                                    epsilon = selected_epsilon)
+      # check
+      print(sumLeastSquaresFitNprop3(c(this_deoptim_fit_params_deviated$N0, this_deoptim_fit_params_deviated$lag)) == this_deoptim_fit_params_deviated$bestval)
+      
+      deoptim_fit_params_deviated = deoptim_fit_params_deviated %>% 
+        rbind(this_deoptim_fit_params_deviated)
+      deoptim_out = NULL
+      
     }
-}
+  }
 
-  
+
 
 rownames(deoptim_fit_params_deviated) = NULL
 deoptim_fit_params = deoptim_fit_params %>%
@@ -266,11 +319,11 @@ for (stochastic_run in stochastic_runs)
       deoptim_out = DEoptim(fn = sumLeastSquaresFitNprop, lower = c(0), upper=c(1),
                             control = deopticontrol)
       this_deoptim_fit_params_rand_deviated = data.frame(N0= deoptim_out$optim$bestmem[1], 
-                                                    lag =  tlag,  
-                                                    week = selected_week, 
-                                                    type = selected_type, 
-                                                    bestval = deoptim_out$optim$bestval, 
-                                                    epsilon = paste0("run", stochastic_run))
+                                                         lag =  tlag,  
+                                                         week = selected_week, 
+                                                         type = selected_type, 
+                                                         bestval = deoptim_out$optim$bestval, 
+                                                         epsilon = paste0("run", stochastic_run))
       # check
       #print(sumLeastSquaresFitNprop3(c(this_deoptim_fit_params_rand_deviated$N0, this_deoptim_fit_params_rand_deviated$lag)) == this_deoptim_fit_params_rand_deviated$bestval)
       
@@ -291,11 +344,11 @@ deoptim_fit_params = rbind(deoptim_fit_params %>% filter(epsilon == 1)  %>% muta
 
 
 #@#ggplot(deoptim_fit_params_rand_deviated, aes(x = week)) +
-  #  geom_point(aes(y = N0, col = epsilon)) + 
-  #  geom_line(aes(y = N0, col = epsilon)) +
-  #  facet_wrap("type") +
-  #  ylab(paste0('fitted N0: when tlag = optminal lag*epsilon'))
-  
+#  geom_point(aes(y = N0, col = epsilon)) + 
+#  geom_line(aes(y = N0, col = epsilon)) +
+#  facet_wrap("type") +
+#  ylab(paste0('fitted N0: when tlag = optminal lag*epsilon'))
+
 # OUR biomass are between 0 and 1. So eg et 0.5 they may differ by 0.01 -> MSE = 0.0001
 real_bestval = deoptim_fit_params %>% filter(epsilon == 1) %>% rename(realbestval = bestval) %>% select(week, type, realbestval)
 deoptim_fit_params_ok = deoptim_fit_params %>%
@@ -309,13 +362,13 @@ ggplot(deoptim_fit_params_ok) +
   ylab(paste0('MSE for the best fit')) +
   theme_bw()
 
-  ggplot(deoptim_fit_params_ok, aes(x = week)) +
+ggplot(deoptim_fit_params_ok, aes(x = week)) +
   geom_point(aes(y = lag, col = run_type)) + 
   geom_line(aes(y = lag, col = run_type, group = group)) +
   facet_wrap("type") +
   ylim(c(0, maxLag)) +
   ylab(paste0('tlag: when tlag = optminal lag with noise')) +
-    theme_bw()
+  theme_bw()
 
 ggplot(deoptim_fit_params_ok, aes(x = week)) +
   geom_point(aes(y = N0, col = type)) + 
@@ -324,7 +377,7 @@ ggplot(deoptim_fit_params_ok, aes(x = week)) +
   facet_wrap("run_type") +
   ylab(paste0('Fitted N_prop')) +
   theme_bw()
-  
+
 saveRDS(deoptim_fit_params, "/Users/bognasmug/Q-NQ-data-analysis/deoptim_fit_params_1000iter2.Rds")
 
 aa=deoptim_fit_params_ok %>% 
@@ -348,7 +401,5 @@ ggplot(bb, aes(x = week)) +
   ylim(c(0,1)) +
   ylab(paste0('best of Fitted N_prop')) +
   facet_wrap('epsilon') +
-  theme_bw()
-
-
-  
+  theme_bw()  
+}
