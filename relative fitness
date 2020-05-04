@@ -1,0 +1,161 @@
+library(dplyr)
+library(ggplot2)
+
+
+setwd("~/_PROJEKTY i LAB/_2018_Q i NQ/_PAPER/_GLODZENIE MONOKULTUR/_DATA WEEKS/2020.04.30 - relative fitness/")
+
+
+
+week = 6
+
+
+dane = read.table(paste0("~/_PROJEKTY i LAB/_2018_Q i NQ/_PAPER/_GLODZENIE MONOKULTUR/_DATA WEEKS/W_", week, " NOT-corrected.txt"),
+                  header = TRUE)
+dane = as.data.frame(dane)
+
+daneFresh = read.table("~/_PROJEKTY i LAB/_2018_Q i NQ/_PAPER/_GLODZENIE MONOKULTUR/_DATA WEEKS/W0_fresh cells.txt",
+                       header = TRUE)
+
+daneFresh = daneFresh %>% group_by(time_hours) %>% summarise(Meanbiomass = mean(biomass),
+                                                             sdbiomass = sd(biomass))
+
+
+
+
+findInitialAndFinal = function(data, cell_type){
+  init = data[1,2]
+  fin = data %>% filter(time_hours == 5 | time_hours == 10 | time_hours == 15)
+  N5h = fin[1,2]
+  N10h = fin[2,2]
+  N15h = fin[3,2]
+  
+  data_found = data.frame(week = week, group = cell_type, N_init = init, N_5h = N5h, N_10h = N10h, N_15h = N15h)
+  colnames(data_found) = c("week", "group", "N_init", "N_5h", "N_10h", "N_15h")
+  
+  return(data_found)
+ }
+
+RelativeFitness = function(data_relative){
+  
+  rel_fitness = data.frame(week = numeric(0), group = character(0), RelFit_5h = numeric(0), RelFit_10h = numeric(0), 
+                           RelFit_15h = numeric(0))
+  
+  
+  for (z in c(2:7)) {
+    RelFit_5h = log(relative_data[z, "N_5h"] / relative_data[z, "N_init"]) / log(relative_data[1, "N_5h"] / relative_data[1, "N_init"])
+    RelFit_10h = log(relative_data[z, "N_10h"] / relative_data[z, "N_init"]) / log(relative_data[1, "N_10h"] / relative_data[1, "N_init"])
+    RelFit_15h = log(relative_data[z, "N_15h"] / relative_data[z, "N_init"]) / log(relative_data[1, "N_15h"] / relative_data[1, "N_init"])
+    
+    new_rel_fitness = data.frame(week = week, group = relative_data[z, "group"], RelFit_5h = RelFit_5h, RelFit_10h = RelFit_10h, 
+                                 RelFit_15h = RelFit_15h)
+    
+    rel_fitness = rbind(rel_fitness, new_rel_fitness)
+    
+  }
+  return(rel_fitness)
+}
+
+
+
+
+
+relative_data = findInitialAndFinal(daneFresh, "fresh_cells")
+
+
+levels(dane$group)
+
+a = c("NQ H2O", "NQ old YPD", "Q H2O", "Q old YPD", "S H2O", "S old YPD")
+
+
+for (x in a) {
+  
+  dane_cell_type = dane %>% filter(group == x) %>% group_by(time_hours) %>% summarise(biomass = mean(na.omit(meanBiomass)),
+                                                                                      sd_biomass = sd(na.omit(SDbiomass)))
+  dane_cell_type = as.data.frame(dane_cell_type)
+  
+  nowe_relative = findInitialAndFinal(dane_cell_type, x)
+  
+  relative_data = rbind(relative_data, nowe_relative)
+  
+  }
+
+
+relative_data
+
+
+
+weekly_relative_fitness = RelativeFitness(relative_data)
+
+
+
+p1 = ggplot(data = weekly_relative_fitness, aes(x = group))+
+        geom_point(aes(y = RelFit_5h), col = "green", size = 3)+
+        geom_point(aes(y = RelFit_10h), col = "blue", size = 3)+
+        geom_point(aes(y = RelFit_15h), col = "grey", size = 3)+
+        theme_bw() +
+        ylab("reative fitness") +
+        ggtitle(paste0("week ", week, "
+            RelFit_5h - green 
+            RelFit_10h - blue 
+            RelFit_15h - grey"))
+
+p1
+
+ggsave(p1, filename = paste0("Week ", week, " - relative fintess.jpg"), width = 150, height = 160, units = "mm")
+
+#relative_fitness = relative_fitness %>% filter(week < 1)
+
+
+relative_fitness = rbind(relative_fitness, weekly_relative_fitness)
+
+relative_fitness
+
+write.table(relative_fitness, file = "Relative fitness.txt", col.names = TRUE, row.names = FALSE, sep = "\t")
+
+# wykresy - wszystkie tygodnie 
+
+p5 = ggplot(data = relative_fitness, aes(x = week, col = group))+
+  geom_point(aes(y = RelFit_5h), size = 3)+
+  geom_line(aes(y = RelFit_5h))+
+  #geom_point(aes(y = RelFit_10h), shape = 10, size = 3)+
+  #geom_point(aes(y = RelFit_15h), shape = 13, size = 3)+
+  theme_bw() +
+  ylab("reative fitness")+
+  ggtitle("Relative finess - 5h")
+
+p5  
+
+
+
+p10 = ggplot(data = relative_fitness, aes(x = week, col = group))+
+  #geom_point(aes(y = RelFit_5h), size = 3)+
+  #geom_line(aes(y = RelFit_5h))+
+  geom_point(aes(y = RelFit_10h), size = 3)+
+  geom_line(aes(y = RelFit_10h))+
+  #geom_point(aes(y = RelFit_15h), shape = 13, size = 3)+
+  theme_bw() +
+  ylab("reative fitness")+
+  ggtitle("Relative finess - 10h")
+
+p10
+
+
+
+p15 = ggplot(data = relative_fitness, aes(x = week, col = group))+
+  #geom_point(aes(y = RelFit_5h), size = 3)+
+  #geom_line(aes(y = RelFit_5h))+
+  #geom_point(aes(y = RelFit_10h), shape = 10, size = 3)+
+  geom_point(aes(y = RelFit_15h), size = 3)+
+  geom_line(aes(y = RelFit_15h))+
+  theme_bw() +
+  ylab("reative fitness")+
+  ggtitle("Relative finess - 15h")
+
+p15
+
+
+
+ggsave(p5, filename = paste0("Relative fintess - 5h.jpg"), width = 150, height = 160, units = "mm")
+ggsave(p10, filename = paste0("Relative fintess - 10h.jpg"), width = 150, height = 160, units = "mm")
+ggsave(p15, filename = paste0("Relative fintess - 15h.jpg"), width = 150, height = 160, units = "mm")
+
