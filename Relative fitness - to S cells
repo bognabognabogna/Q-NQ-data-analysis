@@ -1,0 +1,254 @@
+library(dplyr)
+library(ggplot2)
+
+
+setwd("~/_PROJEKTY i LAB/_2018_Q i NQ/_PAPER/_GLODZENIE MONOKULTUR/_DATA WEEKS/2020.04.30 - relative fitness/")
+
+
+findInitialAndFinal_rep = function(data, cell_type, repetition){
+  init = data[1,2]
+  fin = data %>% filter(time_hours == 5 | time_hours == 10 | time_hours == 15)
+  N5h = fin[1,2]
+  N10h = fin[2,2]
+  N15h = fin[3,2]
+  
+  data_found = data.frame(week = week, group = cell_type, repetition = repetition, N_init = init, N_5h = N5h, N_10h = N10h, N_15h = N15h)
+  colnames(data_found) = c("week", "group", "repetition", "N_init", "N_5h", "N_10h", "N_15h")
+  
+  return(data_found)
+}
+
+
+relative_data = data.frame(week = numeric(0), group = character(0), N_init = numeric(0), N_5h = numeric(0), N_10h =numeric(0), N_15h = numeric(0))
+
+
+for (week in 1:6) {
+  
+
+dane = read.table(paste0("~/_PROJEKTY i LAB/_2018_Q i NQ/_PAPER/_GLODZENIE MONOKULTUR/_DATA WEEKS/W_", week, " NOT-corrected.txt"),
+                  header = TRUE)
+dane = as.data.frame(dane)
+
+
+
+for (x in levels(dane$group)) {
+  for (y in levels(dane$repetition)) {
+    
+    dane_cell_type = dane %>% filter(group == x) %>% filter(repetition == y) %>%
+      group_by(time_hours) %>% summarise(biomass = mean(na.omit(meanBiomass)),
+                                         sd_biomass = sd(na.omit(SDbiomass)))
+    
+    dane_cell_type = as.data.frame(dane_cell_type)
+    
+    
+    nowe_relative = findInitialAndFinal_rep(dane_cell_type, x, y)
+    
+    
+    relative_data = rbind(relative_data, nowe_relative)
+    
+  }}
+
+}
+
+
+
+dane_relative_all = relative_data
+
+
+SH = dane_relative_all %>% filter(group == "S H2O") %>% group_by(week, group) %>% summarise(mean(N_init), mean(N_5h), mean(N_10h), mean(N_15h))
+SH = as.data.frame(SH)
+
+SY = dane_relative_all %>% filter(group == "S old YPD") %>% group_by(week, group) %>% summarise(mean(N_init), mean(N_5h), mean(N_10h), mean(N_15h))
+SY = as.data.frame(SY)
+
+
+ypd = c("Q old YPD", "NQ old YPD")
+h2o = c("Q H2O", "NQ H2O")
+  
+
+
+pop = "Q H2O"
+w = 2
+datadata = relative_data
+Sh_lub_y = SH
+  
+RelativeToSFitness = function(datadata, Sh_lub_y, h2o_lub_ypd){
+  
+  data_output = data.frame(ncol(10))
+  
+  for (pop in h2o_lub_ypd) {
+    datapop = datadata %>% filter(group == pop)
+    
+    for (w in 1:6) {
+      datapopweek = datapop %>% filter(week == w)
+      Sh_lub_yweek = Sh_lub_y %>% filter(week == w) 
+      
+      datapopweek = datapopweek %>% mutate(FIT5 = log(N_5h/N_init)/log(Sh_lub_yweek[1,"mean(N_5h)"]/Sh_lub_yweek[1,"mean(N_init)"]),
+                                           FIT10 = log(N_10h/N_init)/log(Sh_lub_yweek[1,"mean(N_10h)"]/Sh_lub_yweek[1,"mean(N_init)"]),
+                                           FIT15 = log(N_15h/N_init)/log(Sh_lub_yweek[1,"mean(N_15h)"]/Sh_lub_yweek[1,"mean(N_init)"]))
+    
+      
+      data_output = rbind(data_output, datapopweek)
+      }
+    }
+  
+ return(data_output) 
+}
+
+
+
+QNQ_H = RelativeToSFitness(relative_data, SH, h2o)
+QNQ_S = RelativeToSFitness(relative_data, SY, ypd)
+
+QNQ = rbind(QNQ_H, QNQ_S)
+
+
+
+QNQ_summary = QNQ %>% group_by(group, week) %>% summarise(sumFIT5 = mean(na.omit(FIT5)), sdFIT5 = sd(na.omit(FIT5)),
+                                                          sumFIT10 = mean(na.omit(FIT10)), sdFIT10 = sd(na.omit(FIT10)),
+                                                          sumFIT15 = mean(na.omit(FIT15)), sdFIT15 = sd(na.omit(FIT15)))
+
+
+QNQ_summary = as.data.frame(QNQ_summary)
+
+write.table(QNQ_summary, file = "RelFitness - to S - summary.txt", col.names = TRUE, row.names = FALSE, sep = "\t")
+write.table(QNQ, file = "RelFitness - to S.txt", col.names = TRUE, row.names = FALSE, sep = "\t")
+
+
+
+
+
+# ---- wykresy - relative fitness -------------
+
+ggplot(data = QNQ_summary %>% filter(group == "Q H2O" | group == "NQ H2O"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT5))+
+  geom_errorbar(aes(ymin = sumFIT5 - sdFIT5, ymax = sumFIT5 + sdFIT5))+
+  geom_line(aes(y = sumFIT5), size = 2)+
+  theme_bw()
+
+
+ggplot(data = QNQ_summary %>% filter(group == "Q H2O" | group == "NQ H2O"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT10))+
+  geom_errorbar(aes(ymin = sumFIT10 - sdFIT10, ymax = sumFIT10 + sdFIT10))+
+  geom_line(aes(y = sumFIT10), size = 2)+
+  theme_bw()
+
+
+ggplot(data = QNQ_summary %>% filter(group == "Q H2O" | group == "NQ H2O"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT15))+
+  geom_errorbar(aes(ymin = sumFIT15 - sdFIT15, ymax = sumFIT15 + sdFIT15))+
+  geom_line(aes(y = sumFIT15), size = 2)+
+  theme_bw()
+
+
+
+
+ggplot(data = QNQ_summary %>% filter(group == "Q old YPD" | group == "NQ old YPD"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT5))+
+  geom_errorbar(aes(ymin = sumFIT5 - sdFIT5, ymax = sumFIT5 + sdFIT5))+
+  geom_line(aes(y = sumFIT5), size = 2)+
+  theme_bw()
+
+
+ggplot(data = QNQ_summary %>% filter(group == "Q old YPD" | group == "NQ old YPD"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT10))+
+  geom_errorbar(aes(ymin = sumFIT10 - sdFIT10, ymax = sumFIT10 + sdFIT10))+
+  geom_line(aes(y = sumFIT10), size = 2)+
+  theme_bw()
+
+
+ggplot(data = QNQ_summary %>% filter(group == "Q old YPD" | group == "NQ old YPD"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT15))+
+  geom_errorbar(aes(ymin = sumFIT15 - sdFIT15, ymax = sumFIT15 + sdFIT15))+
+  geom_line(aes(y = sumFIT15), size = 2)+
+  theme_bw()
+
+
+
+
+
+
+ggplot(data = QNQ_summary %>% filter(group == "Q H2O" | group == "Q old YPD"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT5))+
+  geom_errorbar(aes(ymin = sumFIT5 - sdFIT5, ymax = sumFIT5 + sdFIT5))+
+  geom_line(aes(y = sumFIT5), size = 2)+
+  theme_bw()
+
+
+ggplot(data = QNQ_summary %>% filter(group == "Q H2O" | group == "Q old YPD"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT10))+
+  geom_errorbar(aes(ymin = sumFIT10 - sdFIT10, ymax = sumFIT10 + sdFIT10))+
+  geom_line(aes(y = sumFIT10), size = 2)+
+  theme_bw()
+
+
+ggplot(data = QNQ_summary %>% filter(group == "Q H2O" | group == "Q old YPD"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT15))+
+  geom_errorbar(aes(ymin = sumFIT15 - sdFIT15, ymax = sumFIT15 + sdFIT15))+
+  geom_line(aes(y = sumFIT15), size = 2)+
+  theme_bw()
+
+
+
+
+
+ggplot(data = QNQ_summary %>% filter(group == "NQ H2O" | group == "NQ old YPD"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT5))+
+  geom_errorbar(aes(ymin = sumFIT5 - sdFIT5, ymax = sumFIT5 + sdFIT5))+
+  geom_line(aes(y = sumFIT5), size = 2)+
+  theme_bw()
+
+
+ggplot(data = QNQ_summary %>% filter(group == "NQ H2O" | group == "NQ old YPD"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT10))+
+  geom_errorbar(aes(ymin = sumFIT10 - sdFIT10, ymax = sumFIT10 + sdFIT10))+
+  geom_line(aes(y = sumFIT10), size = 2)+
+  theme_bw()
+
+
+ggplot(data = QNQ_summary %>% filter(group == "NQ H2O" | group == "NQ old YPD"), aes(x = week, col = group))+
+  geom_point(aes(y = sumFIT15))+
+  geom_errorbar(aes(ymin = sumFIT15 - sdFIT15, ymax = sumFIT15 + sdFIT15))+
+  geom_line(aes(y = sumFIT15), size = 2)+
+  theme_bw()
+
+
+
+
+
+
+# ------------- wykresy N_end ----------------
+
+
+ggplot(data = QNQ %>% filter(group == "Q H2O" | group == "NQ H2O"), 
+       aes(x = week, col = group))+
+  geom_point(aes(y = N_5h))+
+  theme_bw()
+
+ggplot(data = QNQ %>% filter(group == "Q H2O" | group == "NQ H2O"), 
+       aes(x = week, col = group))+
+  geom_point(aes(y = N_10h))+
+  theme_bw()
+
+ggplot(data = QNQ %>% filter(group == "Q H2O" | group == "NQ H2O"), 
+       aes(x = week, col = group))+
+  geom_point(aes(y = N_15h))+
+  theme_bw()
+
+
+
+ggplot(data = QNQ %>% filter(group == "Q old YPD" | group == "NQ old YPD"), 
+       aes(x = week, col = group))+
+  geom_point(aes(y = N_5h))+
+  theme_bw()
+
+ggplot(data = QNQ %>% filter(group == "Q old YPD" | group == "NQ old YPD"), 
+       aes(x = week, col = group))+
+  geom_point(aes(y = N_10h))+
+  theme_bw()
+
+ggplot(data = QNQ %>% filter(group == "Q old YPD" | group == "NQ old YPD"), 
+       aes(x = week, col = group))+
+  geom_point(aes(y = N_15h))+
+  theme_bw()
+
