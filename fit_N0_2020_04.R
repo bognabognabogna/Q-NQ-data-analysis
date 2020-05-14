@@ -150,7 +150,8 @@ ggplot(deoptim_fit_params, aes(x = week)) +
 
 
 # DeOPtim gives same results like multistart but is quicker and doesn't require setting arbitrary start points
-eps = 0.0004 # on average 0.02 difference per point (0.0024 is 0.01 OD)
+eps = 0.0001
+#eps = 0.0004 # on average 0.02 difference per point (0.0024 is 0.01 OD)
 # 5% from the minimal mse
 mse_landscape = data.frame(N0=numeric(0), lag=numeric(0), week=numeric(0), type = numeric(0), mse = numeric(0))
 for (selected_type in types) {
@@ -172,14 +173,14 @@ for (selected_week in weeks) {
   print(paste0(" a: ",a, " Vh: ", Vh, " Kh: ",Kh, " N0: ", N0, " H0: ", H0))
   
   # Note a tiny change in tlag may make a big difference in the MSE. As tlag = 0.50001 -> we assume N(0.5) = N0, tlag = 0.499999 -> N(0.5) > N0!
+  #opt_mse =  sumLeastSquaresFitNpropFirst10Obs(c(this_deoptim_fit_params$N0, this_deoptim_fit_params$lag))
   opt_mse =  sumLeastSquaresFitNprop3(c(this_deoptim_fit_params$N0, this_deoptim_fit_params$lag))
   lags = seq(minLag, maxLag, 0.1)
   N0s = seq(0,1, 0.05)
-  #lags = seq(max(minLag, this_deoptim_fit_params$lag - lagradius), min(maxLag, this_deoptim_fit_params$lag + lagradius), 0.1)
-  #N0s = seq(max(this_deoptim_fit_params$N0 - lagradius,0),min(this_deoptim_fit_params$N0 + N0radius, 1),0.01)
   for (no in N0s) {
     for (lag in lags) {
       mse =  sumLeastSquaresFitNprop3(c(no, lag))
+      #mse = sumLeastSquaresFitNpropFirst10Obs(c(no, lag))
       this_mse = data.frame(N0=no, lag=lag, week=selected_week, type = selected_type, mse = mse)
       mse_landscape = rbind(mse_landscape, this_mse)
     }}
@@ -207,8 +208,9 @@ Min = function(x) {if (length(x)==0){NA}else{min(x)}}
 Max = function(x) {if (length(x)==0){NA}else{max(x)}}
 dataWithConfidence = mse_landscape %>%
   inner_join(deoptim_fit_params %>% select(N0optim = N0, lagoptim = lag, bestval, week, type), by = c("week", "type")) %>%
-  #mutate(goodFit = mse - bestval <= 0.0004) %>%
-  mutate(goodFit = mse - bestval <= 0.05*bestval) %>%
+  rowwise() %>%
+  mutate(goodFit = mse - bestval <= 0.0004) %>%
+  #mutate(goodFit = mse <= 1.05*bestval) %>%
   group_by(week, type, N0optim) %>%
   #filter(goodFit) %>%
   summarise(minN0 = Min(N0[goodFit]),

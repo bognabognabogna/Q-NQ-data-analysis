@@ -79,6 +79,16 @@ sumLeastSquaresFitNprop3 = function(param) {
   return(sum(difference^2)/num_obs)
 }
 
+
+sumLeastSquaresFitNpropFirst10Obs = function(param) {
+  Nprop = param[1]
+  tlag = param[2]
+  simulatedN = simulate_regrowth_with_lag(a, Vh, Kh,tlag, N0, Nprop, H0, data)
+  difference = head(data$biomass - simulatedN,10)
+  return(sum(difference^2)/10)
+}
+
+
 GetMeanValues = function(data, cols_to_group_by) {
   averagedData = data %>%
     group_by_at(cols_to_group_by) %>%
