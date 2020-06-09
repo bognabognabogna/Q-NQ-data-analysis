@@ -1,6 +1,12 @@
 # set directory o the directory of this script!
 
 
+# UWAGA: MY ZNAJDUJEMY N0 jako %poczatkowej biomassy widzianej w naszym OD.
+# TO NIE JEST %glodzonych komorek, ktore wracaja do podzialu
+# bo czesc komorek glodzonych mogla sie dawno rozpaść i nie jest widoczna w poczatkowym OD
+# jeśli chcemy %Głodzonych komórek które wracają do podziału
+# To musimy wziąć N0*initial biomass / biomass at the beginning of starvation (density)
+
 suppressWarnings(suppressPackageStartupMessages(library(deSolve)))
 suppressWarnings(suppressPackageStartupMessages(library(RColorBrewer)))
 suppressWarnings(suppressPackageStartupMessages(library(lubridate)))
@@ -9,7 +15,7 @@ suppressWarnings(suppressPackageStartupMessages(library(ggplot2)))
 suppressWarnings(suppressPackageStartupMessages(library(DEoptim)))
 suppressWarnings(suppressPackageStartupMessages(library(dplyr)))
 source('~/Q-NQ-data-analysis/Q-NQ-helper-functions.R')               
-
+deopticontrol = DEoptim.control(itermax = 1000, reltol = 10^(-8), trace = 100)
 
 # molar mass of glucose: 180g / mol = 0.180 g per mmol
 # 2% glucose i.e. 20g per 1L = 20[g/L] * 1/0.18 [mmol/g] = 20/0.18 [mmol/L]
@@ -33,6 +39,7 @@ N0 = freshCells$biomass[1]
 Nend = freshCells$biomass[nrow(freshCells)]
 # find the parameter a i.e. how many grams of proteins can be created per mmol of glucose
 a = mean((Nend-N0)/(H0))
+
 
 
 ## This is an example of how to fit an MLE estimator
@@ -63,7 +70,6 @@ a = mean((Nend-N0)/(H0))
 # fit params to fresh cells using Deoptim
 # restrict the growth curve to 16h onl, otherwise we get unreliable parameters. Probably because there is a lot of noise between h12 and h24
 data = freshCells
-deopticontrol = DEoptim.control(itermax = 1000, reltol = 10^(-8), trace = 100)
 #Parameters data, a,N0 and H0 are taken from the global environment
 deoptim_out = DEoptim(fn = sumLeastSquaresFitGrowthToDeoptim, lower = c(0,0,0), upper=c(300,300,3),
                       control = deopticontrol)
@@ -72,6 +78,11 @@ deoptim_out = DEoptim(fn = sumLeastSquaresFitGrowthToDeoptim, lower = c(0,0,0), 
 Vh=deoptim_out$optim$bestmem[1] %>% as.numeric()
 Kh=deoptim_out$optim$bestmem[2] %>% as.numeric()
 freshLag = deoptim_out$optim$bestmem[3] %>% as.numeric()
+
+saveRDS(a, "~/Q-NQ-data-analysis/a.Rds")
+saveRDS(Kh, "~/Q-NQ-data-analysis/Kh.Rds")
+saveRDS(Vh, "~/Q-NQ-data-analysis/Vh.Rds")
+
 
 
 deoptim_fit_params = data.frame(N0 = numeric(0), lag = numeric(0), week = integer(0), type = character(0), bestval = numeric(0))
@@ -147,6 +158,8 @@ ggplot(deoptim_fit_params, aes(x = week)) +
   geom_point(aes(y = bestval, col = type)) + 
   geom_line(aes(y = bestval, col = type)) +
   ylab('mean squared error for the best fit')
+
+saveRDS(deoptim_fit_params , "~/Q-NQ-data-analysis/deoptim_fit_params_and_NQ2")
 
 
 # DeOPtim gives same results like multistart but is quicker and doesn't require setting arbitrary start points
