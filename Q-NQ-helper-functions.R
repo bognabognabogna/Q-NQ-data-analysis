@@ -30,8 +30,8 @@ simulate_regrowth_two_strains_lag = function(Time, State, Pars) {
       JgN2 = 0
       } else{
       if(Time > tlag1) {JgN1 =  Jg*N1} else{JgN1 =  0}
-      if(Time > tlag2) {JgN2 =  Jg*N1} else{JgN2 =  0}
-    }
+      if(Time > tlag2) {JgN2 =  Jg*N2} else{JgN2 =  0}
+      }
     Gdot  = -JgN1 - JgN2
     N1dot = a*JgN1
     N2dot = a*JgN2

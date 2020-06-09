@@ -22,7 +22,10 @@ max_time = 24
 a=readRDS("~/Q-NQ-data-analysis/a.Rds")
 Kh=readRDS("~/Q-NQ-data-analysis/Kh.Rds")
 Vh=readRDS("~/Q-NQ-data-analysis/Vh.Rds")
-deoptim_fit_params = readRDS("~/Q-NQ-data-analysis/deoptim_fit_params_and_NQ2")
+#deoptim_fit_params = readRDS("~/Q-NQ-data-analysis/deoptim_fit_params_and_NQ2")
+deoptim_fit_params = readRDS("~/Q-NQ-data-analysis/deoptim_fit_params_1000iter.RDS") %>%
+  filter(run_type == "main")
+### fit to regrowth curve
 weeks = 1:6
 
 selected_type = "S"
@@ -50,6 +53,14 @@ NpropNQ =  deoptim_fit_params %>% filter(week == selected_week & type == "NQ") %
 tlagNQ = deoptim_fit_params %>% filter(week == selected_week & type == "NQ") %>% pull(lag)
 
 
+# it looks that S grows slower than it should if it was a mixture of 75% Q and 25%NQ
+#data$pred75=simulate_regrowth_two_srains_with_lag(a, Vh, Kh, tlagQ,tlagNQ, N0, NpropQ, NpropNQ, 0.75, H0, data$time_hours) 
+#data$pred50=simulate_regrowth_two_srains_with_lag(a, Vh, Kh, tlagQ,tlagNQ, N0, NpropQ, NpropNQ, 0.5, H0, data$time_hours) 
+#ggplot(data %>% tidyr::gather(key = "key", value = "value", biomass, pred75, pred50)) +
+#  geom_line(aes(x=time_hours, y = value, col = key))
+  
+
+# find proportions of Q after the starvation. The H0 is that % = 75%
 optim_prop_out = DEoptim(fn = sumLeastSquaresFitPropQAndNQ, 
                       lower = c(0), upper=c(1),
                       control = deopticontrol)
@@ -77,4 +88,23 @@ p1=ggplot(data_new) +
 print(p1)
 }
 
+saveRDS(all_prop_fited, "/Users/bognasmug/Q-NQ-data-analysis/all_prop_fited.RDS")
+ggplot(data = all_prop_fited, aes(x = week, y = propQ)) +
+  geom_line() +
+  geom_point() +
+  ylab("Prop Q after starvation (fitted)") +
+  geom_hline(aes(yintercept = 0.75), col = "red") +
+  ylim(c(0,1))
 
+ggplot(deoptim_fit_params %>% filter(type %in% c("Q", "NQ")),
+       aes(x = week, y = N0, col = type)) +
+  geom_line() +
+  geom_point() +
+  ylab("Prop that comes back to growth") +
+  ylim(c(0,1)) 
+  
+ggplot(deoptim_fit_params %>% filter(type %in% c("Q", "NQ")),
+       aes(x = week, y = lag, col = type)) +
+  geom_line() +
+  geom_point() +
+  ylab("Lag") 
