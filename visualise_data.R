@@ -40,7 +40,24 @@ ggplot(data1) +
   facet_grid(.~time_hours)
 
 
-ggplot(data1 %>% filter(time_hours == 0.5)) +
+datInit = data %>% filter(time_hours == 1) %>% select(week, biomass,type)
+dataHypotheticalSInit = datInit %>% 
+  group_by(week) %>% 
+  summarise(biomass = 0.75*biomass[type == "Q"] + 0.25*biomass[type == "NQ"]) %>%
+  ungroup() %>%
+  mutate(type = "75%Q + 25%NQ")
+  datInit = datInit %>% rbind(dataHypotheticalSInit)
+
+ggplot(datInit) +
+    geom_line(aes(x = week, color = type, y = biomass)) +
+    geom_point(aes(x = week, color = type, y = biomass)) +
+    ylab("initial biomass after starvation") +
+    xlab('weeks in starvation')
+    theme_bw() 
+  
+  
+    
+ggplot(data1) +
   geom_line(aes(x = week, color = type, y = biomass)) +
   geom_point(aes(x = week, color = type, y = biomass)) +
   ylab("initial biomass") +
