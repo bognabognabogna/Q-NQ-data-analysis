@@ -643,6 +643,73 @@ end
 
 writetable(dataT,strcat(results_folder, '/',scenario, suffix, '.txt'))
 
+%% Compare NQ in H20 and YPD: assuming zero lags
+varNames = {'Regrowth_Time', 'finalBiomass', 'week', 'type', 'environment'};
+dataT=array2table(zeros(0,5), 'VariableNames',varNames);
+scenario = 'long_starvation_NQ_YPD_VS_H20_assuming_zero_lags';
+% Experiment 1a
+final_prop_long_starvation = [];
+final_biomass_long_starvation = [];
+for env = [1 2]
+    if env == 1
+        environment = "H20";
+        reusablility_ratio=0;
+        LAGSQ = zeros(size(LAGS_H20_Q));
+        LAGSNQ= zeros(size(LAGS_H20_Q));
+    else
+        environment = "YPD";
+        reusablility_ratio=0.5;
+        LAGSQ = zeros(size(LAGS_H20_Q));
+        LAGSNQ=zeros(size(LAGS_H20_Q));
+
+    end
+for week = 1:6
+    Qlag = LAGSQ(week);
+    NQlag = LAGSNQ(week);
+    Tstarvation = week*7*24;
+    for i = 1:length(freqQ)
+    % start starvation with some Q and some NQ
+        f=freqQ(i); 
+        type = types(i);
+        for j = 1:length(regrowth_times)
+                y0S = [0; f*P0starvation; 0; (1-f)*P0starvation;0;0;0];
+                [t,Ys] = ode15s(@(t,y) simulate_model(t,y,Vh, Kh,a, 0, 0, epsilon_NQ, epsilon_Q, epsilon,epsilonAG, reusablility_ratio, dQ, dNQ, b),[0, Tstarvation], y0S, options);    
+
+                % now the regrowth
+                y0R = [G0; 0; Ys(end,2);Ys(end,3)+Ys(end,4)+Ys(end,5);0;0;0];
+                [t,Y] = ode15s(@(t,y) simulate_model(t,y,Vh, Kh,a, Qlag, NQlag, epsilon_NQ, epsilon_Q, epsilon,epsilonAG, reusablility_ratio_regrowth, dQ, dNQ, b),[0, regrowth_times(j)], y0R, options);  
+         
+                %[t,Y] = ode15s(@(t,y) simulate_model(t,y,Vh, Kh,a, Qlag, NQlag, 0, 0, 0,0, 0, dQ, dNQ, b),[0, regrowth_times(j)], y0R, options);          
+
+                % final amount of biomass
+                final_biomass_long_starvation(i,j, week, env) = Y(end,2) + Y(end,3)  + Y(end,4)  + Y(end,5);
+        end
+        dataTnew=table(regrowth_times', 'VariableNames',{'Regrowth_Time'});
+        dataTnew.finalBiomass = final_biomass_long_starvation(i,:, week, env)';
+        dataTnew.week = repmat(week, length(regrowth_times),1);
+        dataTnew.type = repmat(type, length(regrowth_times),1);
+        dataTnew.environment = repmat(environment, length(regrowth_times),1);
+        dataT = [dataT;dataTnew];
+end
+end
+end
+
+NQYPDtoNQH20 = final_biomass_long_starvation(1,:,:,2)./final_biomass_long_starvation(1,:,:,1);
+figure()
+for week=1:6
+subplot(6,1,week)
+title('Long starvation NQ in H20 vs YPD comparison: zero lags')
+hold on
+plot(regrowth_times, NQYPDtoNQH20(1,:, week), 'DisplayName', strcat('f_Q = ',num2str(freqQ(i))))
+xlabel('regrowth time [h]')
+ylabel({'relative fitness of NQ in YPD to H20'})
+title(scenario)
+end
+
+
+writetable(dataT,strcat(results_folder, '/',scenario, suffix, '.txt'))
+
+
 
 %% additional checks
 % check that what makes NQ do better in YPD is the reincarnation
